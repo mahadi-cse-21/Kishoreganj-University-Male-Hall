@@ -10,47 +10,73 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Meal;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class ManagerDashboardController extends Controller
 {
     public function index()
     {
+        $manager = Auth::user();
+        $floor = $manager->meal_floor; // Manager's floor
         $today = now()->format('Y-m-d');
 
         // Get current month and year
         $currentMonth = now()->month;
         $currentYear = now()->year;
 
-        //payment
-        $store_payment = Payment::sum('amount');
+        // Payment (only for floor users)
+        $store_payment = Payment::whereHas('user', function ($q) use ($floor) {
+            $q->where('meal_floor', $floor);
+        })->sum('amount');
 
-        //total_bazar cost
+        // Total bazar cost (all floors or restrict to floor if needed)
         $bazar_total_cost = Bazar::sum('cost');
 
-        // Get all active users
-        $users = User::where('status', 'active')->get();
+        // Get all active users on manager's floor
+        $users = User::where('status', 'active')
+            ->where('meal_floor', $floor)
+            ->get();
 
-        // Get all payments with user data
-        $payments = Payment::with('user')->get();
+        // Get all payments with user data (only floor users)
+        $payments = Payment::whereHas('user', function ($q) use ($floor) {
+            $q->where('meal_floor', $floor);
+        })->with('user')->get();
 
-        // Calculate today's meals count (for the stats card)
+        // Calculate today's meals count (for stats card)
         $todayMealsCount = Meal::whereDate('date', $today)
+            ->whereHas('user', function ($q) use ($floor) {
+                $q->where('meal_floor', $floor);
+            })
             ->selectRaw('SUM((breakfast = 1) + (lunch = 1) + (dinner = 1)) as total_meals')
             ->value('total_meals') ?? 0;
 
-        // Get ALL meals for the current month
+        // Get all meals for the current month (only floor users)
         $meals = Meal::with('user')
             ->whereYear('date', $currentYear)
             ->whereMonth('date', $currentMonth)
+            ->whereHas('user', function ($q) use ($floor) {
+                $q->where('meal_floor', $floor);
+            })
             ->get();
 
-        // Calculate meal stats for today (for display)
+        // Calculate meal stats for today
         $todayMeals = $meals->where('date', $today);
 
-        //todays stat
-        $today_breakfast = Meal::where('date', $today)->sum('breakfast');
-        $today_lunch = Meal::where('date', $today)->sum('lunch');
-        $today_dinner = Meal::where('date', $today)->sum('dinner');
+        // Today's stat
+        $today_breakfast = Meal::where('date', $today)
+            ->whereHas('user', function ($q) use ($floor) {
+                $q->where('meal_floor', $floor);
+            })->sum('breakfast');
+
+        $today_lunch = Meal::where('date', $today)
+            ->whereHas('user', function ($q) use ($floor) {
+                $q->where('meal_floor', $floor);
+            })->sum('lunch');
+
+        $today_dinner = Meal::where('date', $today)
+            ->whereHas('user', function ($q) use ($floor) {
+                $q->where('meal_floor', $floor);
+            })->sum('dinner');
 
         $mealStats = [
             'breakfast' => $todayMeals->where('breakfast', true)->count(),
@@ -58,14 +84,16 @@ class ManagerDashboardController extends Controller
             'dinner' => $todayMeals->where('dinner', true)->count(),
         ];
 
-        // Get total payment for the month
-        $totalPayment = Bazar::whereMonth('date', $currentMonth)
+        // Get total payment for the month (only floor users)
+        $totalPayment = Payment::whereHas('user', function ($q) use ($floor) {
+            $q->where('meal_floor', $floor);
+        })->whereMonth('date', $currentMonth)
             ->whereYear('date', $currentYear)
-            ->sum('cost') ?? 0;
+            ->sum('amount') ?? 0;
 
         return view('manager.dashboard', compact(
             'users',
-            'payments', // Add payments to compact
+            'payments',
             'todayMealsCount',
             'totalPayment',
             'store_payment',
@@ -79,11 +107,13 @@ class ManagerDashboardController extends Controller
         ));
     }
 
-    // Add Payment Method
     public function addPayment(Request $request)
     {
+        $manager = Auth::user();
+        $floorUsers = User::where('meal_floor', $manager->meal_floor)->pluck('id');
+
         $request->validate([
-            'user_id' => 'required|exists:users,id',
+            'user_id' => 'required|in:' . implode(',', $floorUsers->toArray()),
             'amount' => 'required|numeric|min:0',
             'date' => 'required|date',
             'notes' => 'nullable|string|max:500'
@@ -101,11 +131,16 @@ class ManagerDashboardController extends Controller
 
     public function updateMealStatus(Request $request)
     {
+        $manager = Auth::user();
+        $floorUsers = User::where('meal_floor', $manager->meal_floor)->pluck('id');
+
         $request->validate([
-            'user_id'   => 'required|exists:users,id',
+            'user_id' => 'required|in:' . implode(',', $floorUsers->toArray()),
             'meal_type' => 'required|in:breakfast,lunch,dinner',
-            'status'    => 'required|boolean',
+            'status' => 'required|boolean',
+            'date' => 'required|date',
         ]);
+
         $meal = Meal::firstOrCreate(
             ['user_id' => $request->user_id, 'date' => $request->date]
         );
@@ -118,7 +153,9 @@ class ManagerDashboardController extends Controller
 
     public function updatemeal(Request $request)
     {
-        // Validate the incoming request
+        $manager = Auth::user();
+        $floorUsers = User::where('meal_floor', $manager->meal_floor)->pluck('id');
+
         $validated = $request->validate([
             'meals' => 'required|array',
         ]);
@@ -127,11 +164,11 @@ class ManagerDashboardController extends Controller
         $createdCount = 0;
         $unchangedCount = 0;
 
-        // Collect all user IDs and dates from the request
         $userIds = [];
         $dates = [];
 
         foreach ($validated['meals'] as $userId => $userDates) {
+            if (!in_array($userId, $floorUsers->toArray())) continue;
             $userIds[] = $userId;
             foreach ($userDates as $date => $mealData) {
                 if (is_array($mealData) && isset($mealData['date'])) {
@@ -140,25 +177,20 @@ class ManagerDashboardController extends Controller
             }
         }
 
-        // Get existing meals for these users and dates
         $existingMeals = Meal::whereIn('user_id', array_unique($userIds))
             ->whereIn('date', array_unique($dates))
             ->get()
-            ->keyBy(function ($meal) {
-                return $meal->user_id . '_' . $meal->date->format('Y-m-d');
-            });
+            ->keyBy(fn($meal) => $meal->user_id . '_' . $meal->date->format('Y-m-d'));
 
         foreach ($validated['meals'] as $userId => $userDates) {
+            if (!in_array($userId, $floorUsers->toArray())) continue;
+
             foreach ($userDates as $date => $mealData) {
-                // Skip if this is just metadata
-                if (!is_array($mealData)) {
-                    continue;
-                }
+                if (!is_array($mealData)) continue;
 
                 $actualDate = $mealData['date'] ?? $date;
                 $actualUserId = $mealData['user_id'] ?? $userId;
 
-                // Prepare new meal data
                 $newBreakfast = isset($mealData['breakfast']) && $mealData['breakfast'] == '1';
                 $newLunch = isset($mealData['lunch']) && $mealData['lunch'] == '1';
                 $newDinner = isset($mealData['dinner']) && $mealData['dinner'] == '1';
@@ -168,7 +200,6 @@ class ManagerDashboardController extends Controller
                 if (isset($existingMeals[$mealKey])) {
                     $existingMeal = $existingMeals[$mealKey];
 
-                    // Check if any field has changed
                     $hasChanges = $existingMeal->breakfast != $newBreakfast ||
                         $existingMeal->lunch != $newLunch ||
                         $existingMeal->dinner != $newDinner;
@@ -184,7 +215,6 @@ class ManagerDashboardController extends Controller
                         $unchangedCount++;
                     }
                 } else {
-                    // Only create if at least one meal is selected
                     if ($newBreakfast || $newLunch || $newDinner) {
                         Meal::create([
                             'user_id' => $actualUserId,
@@ -213,7 +243,7 @@ class ManagerDashboardController extends Controller
             'names' => 'nullable|string|max:255',
         ]);
 
-        $bazar = Bazar::updateOrCreate(
+        Bazar::updateOrCreate(
             ['date' => $validated['date']],
             [
                 'description' => $validated['description'],
@@ -227,14 +257,15 @@ class ManagerDashboardController extends Controller
 
     public function guestmeal(Request $request)
     {
-        // ✅ Validate input
+        $manager = Auth::user();
+        $floorUsers = User::where('meal_floor', $manager->meal_floor)->pluck('id');
+
         $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
+            'user_id' => 'required|in:' . implode(',', $floorUsers->toArray()),
             'number_of_guest_meal' => 'required|numeric|min:0',
             'date' => 'required|date',
         ]);
 
-        // ✅ Save or update guest meal for that user and date
         GuestMeal::updateOrCreate(
             [
                 'user_id' => $validated['user_id'],

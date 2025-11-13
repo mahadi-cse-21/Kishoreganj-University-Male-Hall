@@ -25,9 +25,7 @@
         @if(session('success'))
             <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-down">
                 <div class="bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 max-w-md">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
+                    
                     <span class="font-medium">{{ session('success') }}</span>
                 </div>
             </div>
@@ -181,7 +179,7 @@
                             message.remove();
                         }
                     }, 300);
-                }, 5000);
+                }, 2000);
             });
         });
     </script>

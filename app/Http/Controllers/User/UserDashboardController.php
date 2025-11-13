@@ -50,15 +50,15 @@ class UserDashboardController extends Controller
         // Calculate total meals
         foreach ($myMeals as $meal) {
             $total_meal += ($meal->breakfast ? 0.5 : 0)
-                        + ($meal->lunch ? 1.0 : 0)
-                        + ($meal->dinner ? 1.0 : 0);
+                + ($meal->lunch ? 1.0 : 0)
+                + ($meal->dinner ? 1.0 : 0);
         }
 
         // Calculate last 7 days' total meals
         foreach ($myWeekMeals as $meal) {
             $total_week_meal += ($meal->breakfast ? 0.5 : 0)
-                              + ($meal->lunch ? 1.0 : 0)
-                              + ($meal->dinner ? 1.0 : 0);
+                + ($meal->lunch ? 1.0 : 0)
+                + ($meal->dinner ? 1.0 : 0);
         }
 
         // Total meals of all users
@@ -66,8 +66,8 @@ class UserDashboardController extends Controller
         $current_total_meal = 0.0;
         foreach ($allMeals as $c_meal) {
             $current_total_meal += ($c_meal->breakfast ? 0.5 : 0)
-                                 + ($c_meal->lunch ? 1.0 : 0)
-                                 + ($c_meal->dinner ? 1.0 : 0);
+                + ($c_meal->lunch ? 1.0 : 0)
+                + ($c_meal->dinner ? 1.0 : 0);
         }
 
         // Total bazar cost
@@ -80,7 +80,7 @@ class UserDashboardController extends Controller
             : 0;
 
         // Amount due for this user based on their meals
-        $amount_due = round( $total_paid_from_payments- ($total_meal * $cost_per_meal) , 2);
+        $amount_due = round(($total_meal * $cost_per_meal) - $total_paid_from_payments, 2);
 
         // Payment statistics
         $payment_stats = [
@@ -152,7 +152,7 @@ class UserDashboardController extends Controller
     public function paymentHistory()
     {
         $user = Auth::user();
-        
+
         $payments = Payment::where('user_id', $user->id)
             ->orderBy('date', 'desc')
             ->orderBy('created_at', 'desc')
@@ -170,7 +170,7 @@ class UserDashboardController extends Controller
     public function paymentDetails($id)
     {
         $user = Auth::user();
-        
+
         $payment = Payment::where('user_id', $user->id)
             ->where('id', $id)
             ->firstOrFail();
