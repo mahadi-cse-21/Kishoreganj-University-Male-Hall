@@ -238,6 +238,119 @@
                 </div>
             </div>
 
+            <!-- Meal Off Form -->
+            <form action="{{ route('saveMealOff') }}" method="post"
+                class="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+                @csrf
+                <div class="mb-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                        <svg class="w-6 h-6 mr-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        Meal Off Request
+                    </h3>
+                    <p class="text-gray-600 text-sm">Select the date range when you won't be taking meals</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <!-- Start Date -->
+                    <div>
+                        <label for="start_date" class="block text-sm font-medium text-gray-700 mb-2">
+                            From Date
+                        </label>
+                        <input type="date" name="start_date" id="start_date" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                            min="{{ date('Y-m-d') }}"
+                            required>
+                    </div>
+
+                    <!-- End Date -->
+                    <div>
+                        <label for="end_date" class="block text-sm font-medium text-gray-700 mb-2">
+                            To Date
+                        </label>
+                        <input type="date" name="end_date" id="end_date" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                            min="{{ date('Y-m-d') }}"
+                            required>
+                    </div>
+                </div>
+
+                <!-- Meal Types -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-3">Select Meals to Skip</label>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Breakfast -->
+                        <div
+                            class="flex items-center space-x-3 p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border-2 border-red-200 hover:border-red-300 transition-all duration-300">
+                            <input type="checkbox" name="meals[]" value="breakfast" id="off_breakfast"
+                                class="w-5 h-5 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2">
+                            <label for="off_breakfast" class="flex items-center space-x-3 cursor-pointer">
+                                <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 6h16M4 12h16m-7 6h7"></path>
+                                    </svg>
+                                </div>
+                                <span class="font-semibold text-gray-700">Breakfast</span>
+                            </label>
+                        </div>
+
+                        <!-- Lunch -->
+                        <div
+                            class="flex items-center space-x-3 p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border-2 border-red-200 hover:border-red-300 transition-all duration-300">
+                            <input type="checkbox" name="meals[]" value="lunch" id="off_lunch"
+                                class="w-5 h-5 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2">
+                            <label for="off_lunch" class="flex items-center space-x-3 cursor-pointer">
+                                <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <span class="font-semibold text-gray-700">Lunch</span>
+                            </label>
+                        </div>
+
+                        <!-- Dinner -->
+                        <div
+                            class="flex items-center space-x-3 p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border-2 border-red-200 hover:border-red-300 transition-all duration-300">
+                            <input type="checkbox" name="meals[]" value="dinner" id="off_dinner"
+                                class="w-5 h-5 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2">
+                            <label for="off_dinner" class="flex items-center space-x-3 cursor-pointer">
+                                <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <span class="font-semibold text-gray-700">Dinner</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reason (Optional) -->
+                <div class="mb-6">
+                    <label for="reason" class="block text-sm font-medium text-gray-700 mb-2">
+                        Reason (Optional)
+                    </label>
+                    <textarea name="reason" id="reason" rows="3"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                        placeholder="Let us know why you'll be away..."></textarea>
+                </div>
+
+                <button type="submit"
+                    class="w-full px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Submit Meal Off Request
+                </button>
+            </form>
+
             <!-- Meal Form -->
             <form action="{{ route('saveMeal') }}" method="post"
                 class="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
@@ -355,7 +468,27 @@
             }, 3000);
         }
 
+        // Date validation for meal off form
         document.addEventListener('DOMContentLoaded', function () {
+            const startDateInput = document.getElementById('start_date');
+            const endDateInput = document.getElementById('end_date');
+
+            // Set end date min to start date when start date changes
+            startDateInput.addEventListener('change', function() {
+                endDateInput.min = this.value;
+                if (endDateInput.value && endDateInput.value < this.value) {
+                    endDateInput.value = this.value;
+                }
+            });
+
+            // Set start date max to end date when end date changes
+            endDateInput.addEventListener('change', function() {
+                startDateInput.max = this.value;
+                if (startDateInput.value && startDateInput.value > this.value) {
+                    startDateInput.value = this.value;
+                }
+            });
+
             const toggles = document.querySelectorAll('input[type="checkbox"]');
             toggles.forEach(toggle => {
                 toggle.addEventListener('change', function () {

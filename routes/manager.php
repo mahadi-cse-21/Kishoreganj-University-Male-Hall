@@ -14,7 +14,10 @@ Route::prefix('manager')->group(function () {
 
         Route::post('/addbazar', [ManagerDashboardController::class, 'addBazar'])->name('addbazar');
         Route::post('/guestmeal', [ManagerDashboardController::class, 'guestmeal'])->name('guestmeal');
-        // routes/web.php
+        
         Route::post('/addpayment', [ManagerDashboardController::class, 'addPayment'])->name('addpayment');
+
+
+        
     });
 });

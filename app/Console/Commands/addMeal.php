@@ -27,7 +27,7 @@ class AddMeal extends Command
      */
     public function handle()
     {
-        $users = User::where('meal_floor', 3)->get();
+        $users = User::all();
         $today = today();
 
         foreach ($users as $user) {
