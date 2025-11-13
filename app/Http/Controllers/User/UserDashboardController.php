@@ -145,7 +145,7 @@ class UserDashboardController extends Controller
         $meal->dinner    = $dinner;
         $meal->save();
 
-        return redirect()->back()->with('success', '✅ Meals saved successfully!');
+        return redirect()->back()->with('success', 'Meals saved successfully!');
     }
 
     // New method to show payment history

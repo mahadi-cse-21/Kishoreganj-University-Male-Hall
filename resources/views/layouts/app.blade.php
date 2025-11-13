@@ -26,7 +26,7 @@
             <div class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-down">
                 <div class="bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 max-w-md">
                     
-                    <span class="font-medium">{{ session('success') }}</span>
+                    <span class="font-sm">{{ session('success') }}</span>
                 </div>
             </div>
         @endif
