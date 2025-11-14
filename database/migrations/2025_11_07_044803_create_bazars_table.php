@@ -17,6 +17,7 @@ return new class extends Migration
             $table->float('cost')->default(0.0);
             $table->date('date');
             $table->string('names');
+            $table->unsignedInteger('bazar_floor')->default(3);
             $table->timestamps();
         });
     }

@@ -20,74 +20,66 @@ class ManagerDashboardController extends Controller
         $floor = $manager->meal_floor; // Manager's floor
         $today = now()->format('Y-m-d');
 
-        // Get current month and year
         $currentMonth = now()->month;
         $currentYear = now()->year;
 
-        // Payment (only for floor users)
-        $store_payment = Payment::whereHas('user', function ($q) use ($floor) {
-            $q->where('meal_floor', $floor);
-        })->sum('amount');
+        // Total payment by floor users
+        $store_payment = Payment::whereHas('user', fn($q) => $q->where('meal_floor', $floor))
+            ->sum('amount');
 
-        // Total bazar cost (all floors or restrict to floor if needed)
-        $bazar_total_cost = Bazar::sum('cost');
+        // Total bazar cost for this floor
+        $bazar_total_cost = Bazar::where('bazar_floor', $floor)->sum('cost');
 
         // Get all active users on manager's floor
         $users = User::where('status', 'active')
             ->where('meal_floor', $floor)
             ->get();
 
-        // Get all payments with user data (only floor users)
-        $payments = Payment::whereHas('user', function ($q) use ($floor) {
-            $q->where('meal_floor', $floor);
-        })->with('user')->get();
+        // Get all payments for floor users
+        $payments = Payment::whereHas('user', fn($q) => $q->where('meal_floor', $floor))
+            ->with('user')
+            ->get();
 
-        // Calculate today's meals count (for stats card)
+        // Today's meals count (weighted: breakfast 0.5, lunch 1, dinner 1)
         $todayMealsCount = Meal::whereDate('date', $today)
-            ->whereHas('user', function ($q) use ($floor) {
-                $q->where('meal_floor', $floor);
-            })
-            ->selectRaw('SUM((breakfast = 1) + (lunch = 1) + (dinner = 1)) as total_meals')
+            ->whereHas('user', fn($q) => $q->where('meal_floor', $floor))
+            ->selectRaw(
+                'SUM(
+                    CASE WHEN breakfast = 1 THEN 0.5 ELSE 0 END +
+                    CASE WHEN lunch = 1 THEN 1 ELSE 0 END +
+                    CASE WHEN dinner = 1 THEN 1 ELSE 0 END
+                ) as total_meals'
+            )
             ->value('total_meals') ?? 0;
 
-        // Get all meals for the current month (only floor users)
+        // Get all meals for the current month (floor users only)
         $meals = Meal::with('user')
             ->whereYear('date', $currentYear)
             ->whereMonth('date', $currentMonth)
-            ->whereHas('user', function ($q) use ($floor) {
-                $q->where('meal_floor', $floor);
-            })
+            ->whereHas('user', fn($q) => $q->where('meal_floor', $floor))
             ->get();
 
-        // Calculate meal stats for today
-        $todayMeals = $meals->where('date', $today);
+        // Meals for today
+        $todayMeals = Meal::with('user')
+            ->whereDate('date', $today)
+            ->whereHas('user', fn($q) => $q->where('meal_floor', $floor))
+            ->get();
 
-        // Today's stat
-        $today_breakfast = Meal::where('date', $today)
-            ->whereHas('user', function ($q) use ($floor) {
-                $q->where('meal_floor', $floor);
-            })->sum('breakfast');
-
-        $today_lunch = Meal::where('date', $today)
-            ->whereHas('user', function ($q) use ($floor) {
-                $q->where('meal_floor', $floor);
-            })->sum('lunch');
-
-        $today_dinner = Meal::where('date', $today)
-            ->whereHas('user', function ($q) use ($floor) {
-                $q->where('meal_floor', $floor);
-            })->sum('dinner');
+      
+        // Meal stats for today
+        $today_breakfast = $todayMeals->where('breakfast', true)->count();
+        $today_lunch = $todayMeals->where('lunch', true)->count();
+        $today_dinner = $todayMeals->where('dinner', true)->count();
 
         $mealStats = [
-            'breakfast' => $todayMeals->where('breakfast', true)->count(),
-            'lunch' => $todayMeals->where('lunch', true)->count(),
-            'dinner' => $todayMeals->where('dinner', true)->count(),
+            'breakfast' => $today_breakfast,
+            'lunch' => $today_lunch,
+            'dinner' => $today_dinner,
         ];
 
-        // Get total payment for the month (only floor users)
-        $totalPayment = Payment::whereHas('user', function ($q) use ($floor) {
-            $q->where('meal_floor', $floor);
-        })->whereMonth('date', $currentMonth)
+        // Total payment for current month
+        $totalPayment = Payment::whereHas('user', fn($q) => $q->where('meal_floor', $floor))
+            ->whereMonth('date', $currentMonth)
             ->whereYear('date', $currentYear)
             ->sum('amount') ?? 0;
 
@@ -244,7 +236,7 @@ class ManagerDashboardController extends Controller
         ]);
 
         Bazar::updateOrCreate(
-            ['date' => $validated['date']],
+            ['date' => $validated['date'], 'bazar_floor' => Auth::user()->meal_floor],
             [
                 'description' => $validated['description'],
                 'cost' => $validated['amount'],

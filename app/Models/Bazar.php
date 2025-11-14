@@ -18,6 +18,7 @@ class Bazar extends Model
         'cost',
         'date',
         'names',
+        'bazar_floor',
         
     ];
 

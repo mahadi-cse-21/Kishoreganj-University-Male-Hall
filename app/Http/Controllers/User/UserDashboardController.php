@@ -14,228 +14,181 @@ use Illuminate\Support\Facades\Auth;
 
 class UserDashboardController extends Controller
 {
+    private function mealCount($meal)
+    {
+        $count = 0;
+
+        if ($meal->breakfast) $count += 0.5;
+        if ($meal->lunch)     $count += 1;
+        if ($meal->dinner)    $count += 1;
+
+        return $count;
+    }
+
     public function index()
     {
         $user = Auth::user();
-        $total_payment = (float) ($user->total_payment ?? 0);
-
-        $myMeals = Meal::where('user_id', $user->id)->get();
         $today = now()->toDateString();
 
-        // Fetch today's meal for the logged-in user
+
+        // Meals
+        $myMeals = Meal::where('user_id', $user->id)->get();
         $todayMeal = Meal::where('user_id', $user->id)
             ->whereDate('date', $today)
             ->first();
 
+
         $myWeekMeals = Meal::where('user_id', $user->id)
-            ->where('created_at', '>=', now()->subDays(7))
+            ->whereBetween('date', [
+                now()->subDays(6)->toDateString(),  // 6 days before today
+                now()->toDateString()               // today
+            ])
             ->get();
 
-        // Get user's payment history
+
+        // Payments
         $myPayments = Payment::where('user_id', $user->id)
             ->orderBy('date', 'desc')
             ->get();
 
-        // Calculate total paid from payments table
         $total_paid_from_payments = $myPayments->sum('amount');
 
-        // Initialize counters
-        $total_meal = 0.0;
-        $total_week_meal = 0.0;
+        // Calculate user’s total meal
+        $total_meal = $myMeals->sum(fn($m) => $this->mealCount($m));
 
-        // Safely access today's meal booleans
-        $meal_breakfast = $todayMeal->breakfast ?? false;
-        $meal_lunch     = $todayMeal->lunch ?? false;
-        $meal_dinner    = $todayMeal->dinner ?? false;
+        $total_week_meal = $myWeekMeals->sum(fn($m) => $this->mealCount($m));
 
-        // Get user's meal floor (default to 1 if not set)
-        $meal_floor = $user->meal_floor ?? 1;
+       
+        // Total meals of the floor
+        $floor_users = User::where('meal_floor', $user->meal_floor)->pluck('id');
 
-        // Calculate total meals considering meal_floor
-        foreach ($myMeals as $meal) {
-            $total_meal += $this->calculateMealWithFloor($meal, $meal_floor);
-        }
+        $allMeals = Meal::whereIn('user_id', $floor_users)->with('user')->get();
 
-        // Calculate last 7 days' total meals considering meal_floor
-        foreach ($myWeekMeals as $meal) {
-            $total_week_meal += $this->calculateMealWithFloor($meal, $meal_floor);
-        }
+        $current_total_meal = $allMeals->sum(fn($m) => $this->mealCount($m));
 
-        // Total meals of all users (considering each user's meal_floor)
-        $allMeals = Meal::with('user')->get();
-        $current_total_meal = 0.0;
-        foreach ($allMeals as $c_meal) {
-            $user_meal_floor = $c_meal->user->meal_floor ?? 1;
-            $current_total_meal += $this->calculateMealWithFloor($c_meal, $user_meal_floor);
-        }
+        // Total bazar
+        $total_cost = Bazar::sum('cost');
 
-        // Total bazar cost
-        $bazars = Bazar::all();
-        $total_cost = round($bazars->sum('cost') ?? 0, 2);
-
-        // Avoid division by zero and calculate cost per meal
-        $cost_per_meal = ($current_total_meal > 0)
+        // Cost per meal
+        $cost_per_meal = $current_total_meal > 0
             ? round($total_cost / $current_total_meal, 2)
             : 0;
 
-        // Amount due for this user based on their meals (considering meal_floor)
+        // User’s due
         $amount_due = round(($total_meal * $cost_per_meal) - $total_paid_from_payments, 2);
 
-        // Payment statistics
-        $payment_stats = [
-            'total_paid' => $total_paid_from_payments,
-            'last_payment' => $myPayments->first(),
-            'payment_count' => $myPayments->count(),
-            'average_payment' => $myPayments->count() > 0 ? round($total_paid_from_payments / $myPayments->count(), 2) : 0,
-        ];
-
         return view('user.dashboard', [
-            'total_payment'    => $total_payment,
-            'total_meal'       => round($total_meal, 1),
-            'total_week_meal'  => round($total_week_meal, 1),
-            'meal_breakfast'   => $meal_breakfast,
-            'meal_lunch'       => $meal_lunch,
-            'meal_dinner'      => $meal_dinner,
-            'todayMeal'        => $todayMeal,
-            'cost_per_meal'    => $cost_per_meal,
-            'amount_due'       => $amount_due,
-            'myPayments'       => $myPayments,
-            'payment_stats'    => $payment_stats,
-            'meal_floor'       => $meal_floor, // Add meal_floor to view
+            'total_meal'      => round($total_meal, 1),
+            'total_week_meal' => round($total_week_meal, 1),
+            'meal_breakfast'  => $todayMeal->breakfast ?? false,
+            'meal_lunch'      => $todayMeal->lunch ?? false,
+            'meal_dinner'     => $todayMeal->dinner ?? false,
+            'todayMeal'       => $todayMeal,
+            'cost_per_meal'   => $cost_per_meal,
+            'amount_due'      => $amount_due,
+            'myPayments'      => $myPayments,
+            'payment_stats'   => [
+                'total_paid' => $total_paid_from_payments,
+                'last_payment' => $myPayments->first(),
+                'payment_count' => $myPayments->count(),
+                'average_payment' => $myPayments->count() > 0
+                    ? round($total_paid_from_payments / $myPayments->count(), 2)
+                    : 0,
+            ],
+            'meal_floor' => $user->meal_floor ?? 1,
         ]);
     }
 
-    /**
-     * Calculate meal count considering meal_floor
-     */
-    private function calculateMealWithFloor($meal, $meal_floor)
-    {
-        $breakfast_value = $meal->breakfast ? 0.5 : 0;
-        $lunch_value = $meal->lunch ? 1.0 : 0;
-        $dinner_value = $meal->dinner ? 1.0 : 0;
-        
-        $total_meal_value = $breakfast_value + $lunch_value + $dinner_value;
-        
-        // Apply meal floor - if total is less than meal_floor, use meal_floor instead
-        return max($total_meal_value, $meal_floor);
-    }
 
     public function saveMeal(Request $request)
     {
         $user = Auth::user();
-        $timezone = config('app.timezone');
-        $now = Carbon::now($timezone);
+        $now = now();
         $today = $now->toDateString();
 
-        // Safely get existing meal or new
         $meal = Meal::firstOrNew([
             'user_id' => $user->id,
             'date'    => $today,
         ]);
 
-        // Cutoff times
-        $breakfastCutoff = Carbon::today($timezone)->setHour(6);
-        $lunchCutoff     = Carbon::today($timezone)->setHour(11)->setMinute(30);
-        $dinnerCutoff    = Carbon::today($timezone)->setHour(17);
+        // Correct cutoff times using app timezone
+        $breakfastCutoff = now()->setTime(6, 0);
+        $lunchCutoff     = now()->setTime(11, 30);
+        $dinnerCutoff    = now()->setTime(17, 0);
 
-        // Convert checkbox values safely
         $breakfast = $request->boolean('breakfast');
         $lunch     = $request->boolean('lunch');
         $dinner    = $request->boolean('dinner');
 
-        // Cutoff protection
         if ($breakfast != $meal->breakfast && $now->gte($breakfastCutoff)) {
-            return redirect()->back()->with('error', 'Breakfast booking time is over!');
+            return back()->with('error', 'Breakfast booking time is over!');
         }
         if ($lunch != $meal->lunch && $now->gte($lunchCutoff)) {
-            return redirect()->back()->with('error', 'Lunch booking time is over!');
+            return back()->with('error', 'Lunch booking time is over!');
         }
         if ($dinner != $meal->dinner && $now->gte($dinnerCutoff)) {
-            return redirect()->back()->with('error', 'Dinner booking time is over!');
+            return back()->with('error', 'Dinner booking time is over!');
         }
 
-        // Save or update safely
         $meal->breakfast = $breakfast;
         $meal->lunch     = $lunch;
         $meal->dinner    = $dinner;
         $meal->save();
 
-        return redirect()->back()->with('success', 'Meals saved successfully!');
+        return back()->with('success', 'Meals saved successfully!');
     }
+
 
     public function saveMealOff(Request $request)
     {
         $user = Auth::user();
 
-        // Validate the request
         $validated = $request->validate([
             'start_date' => 'required|date|after_or_equal:today',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'meals' => 'required|array|min:1',
-            'meals.*' => 'in:breakfast,lunch,dinner',
-            'reason' => 'nullable|string|max:500',
+            'end_date'   => 'required|date|after_or_equal:start_date',
+            'meals'      => 'required|array|min:1',
+            'meals.*'    => 'in:breakfast,lunch,dinner',
+            'reason'     => 'nullable|string|max:500',
         ]);
 
-        $start_date = Carbon::parse($validated['start_date']);
-        $end_date = Carbon::parse($validated['end_date']);
-        $selected_meals = $validated['meals'];
-
-        // Process each date in the range
-        $period = CarbonPeriod::create($start_date, $end_date);
-        $processed_days = 0;
+        $period = CarbonPeriod::create($validated['start_date'], $validated['end_date']);
 
         foreach ($period as $date) {
+
             $meal = Meal::firstOrNew([
                 'user_id' => $user->id,
                 'date'    => $date->format('Y-m-d'),
             ]);
 
-            // Update meal selections based on user input
-            if (in_array('breakfast', $selected_meals)) {
-                $meal->breakfast = false;
-            }
-            else{
-                $meal->breakfast = true;
-            }
-            if (in_array('lunch', $selected_meals)) {
-                $meal->lunch = false;
-            }
-            else{
-                $meal->lunch = true;
-            }
-            if (in_array('dinner', $selected_meals)) {
-                $meal->dinner = false;
-            }
-            else{
-                $meal->dinner = true;
+            // Turn OFF only the selected meals — do not turn ON others
+            foreach (['breakfast', 'lunch', 'dinner'] as $type) {
+                if (in_array($type, $validated['meals'])) {
+                    $meal->$type = false;
+                }
             }
 
             $meal->save();
-            $processed_days++;
         }
 
-        return redirect()->back()->with('success', "Meal off request submitted successfully! {$processed_days} days updated.");
+        return back()->with('success', 'Meal off request processed.');
     }
 
-    // New method to show payment history
+
     public function paymentHistory()
     {
         $user = Auth::user();
 
         $payments = Payment::where('user_id', $user->id)
             ->orderBy('date', 'desc')
-            ->orderBy('created_at', 'desc')
             ->paginate(10);
 
-        $total_paid = $payments->sum('amount');
-
         return view('user.payment-history', [
-            'payments' => $payments,
-            'total_paid' => $total_paid,
+            'payments'   => $payments,
+            'total_paid' => $payments->sum('amount'),
         ]);
     }
 
-    // New method to show payment details
+
     public function paymentDetails($id)
     {
         $user = Auth::user();
@@ -244,8 +197,6 @@ class UserDashboardController extends Controller
             ->where('id', $id)
             ->firstOrFail();
 
-        return view('user.payment-details', [
-            'payment' => $payment,
-        ]);
+        return view('user.payment-details', compact('payment'));
     }
 }
